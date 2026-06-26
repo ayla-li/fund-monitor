@@ -1,0 +1,55 @@
+name: 基金智能监控
+
+on:
+  schedule:
+    - cron: '30 1 * * 1-5'
+    - cron: '30 4 * * 1-5'
+    - cron: '30 7 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '运行模式'
+        required: true
+        default: 'close'
+        type: choice
+        options:
+          - open
+          - midday
+          - close
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      
+      - name: Run monitor
+        env:
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+        run: |
+          python fund_monitor_cloud.py --mode ${{ github.event.inputs.mode || 'close' }}
+      
+      - name: Commit and push charts
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add charts/ summaries/
+          git diff --cached --quiet || git commit -m "Update charts and summaries [skip ci]"
+          git push || echo "Nothing to push"
+      
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
